@@ -1,5 +1,5 @@
 
-# Discord Bot Commands Documentation
+# Synnabot Commands Documentation
 
 Welcome to the official documentation for your Discord bot. Here you'll find a comprehensive list of commands, their usage, and descriptions.
 
