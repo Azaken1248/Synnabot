@@ -24,6 +24,21 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 
 ## 🛠️ Example Command Usage
 
+### `!ping`
+
+```bash
+!ping
+# ➜ pong
+```
+
+### `!hello`
+
+```bash
+!hello
+# ➜ hello @Syn
+```
+
+
 ### `!add`
 
 ```bash
