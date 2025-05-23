@@ -1,5 +1,6 @@
 import BirthdayModel from '../../DB/schemas/birthdaySchema.mjs'; 
 import TimeZoneModel from '../../DB/schemas/timeZoneSchema.mjs';
+import TwitchLinkModel from '../../DB/schemas/twitchLinkSchema.mjs';
 import moment from 'moment-timezone';
 
 
@@ -249,6 +250,69 @@ export const getTime = async (message) => {
     } catch (error) {
         console.error('Error fetching time:', error);
         message.channel.send(`\`\`\`Failed to fetch time: ${error.message}\`\`\``);
+    }
+};
+
+export const setTwitch = async (message, args) => {
+    const authorMember = message.guild.members.cache.get(message.author.id);
+    if (!authorMember || !authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
+        message.channel.send("❌ You don't have permission to use this command. Only **💥 Mod** can set Twitch links.");
+        return;
+    }
+
+    if (args.length < 2 || !message.mentions.users.size) {
+        message.channel.send('❌ Usage: `!settwitch @MentionUser twitch_username`');
+        return;
+    }
+
+    const mentionedUser = message.mentions.users.first();
+
+    const twitchUsername = args[1 + message.mentions.users.size - 1]; 
+
+
+    if (!twitchUsername) {
+        message.channel.send('❌ Please provide the Twitch username. Usage: `!settwitch @MentionUser twitch_username`');
+        return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(twitchUsername)) {
+        message.channel.send('❌ Invalid Twitch username format. Twitch usernames can only contain letters, numbers, and underscores.');
+        return;
+    }
+
+    try {
+        // Optional: Verify if the Twitch user actually exists using the API
+        // This adds extra API calls but improves data quality.
+        // const twitchUsers = await getTwitchUsersByLogin([twitchUsername]);
+        // if (twitchUsers.length === 0) {
+        //      message.channel.send(`❌ Twitch user "${twitchUsername}" not found.`);
+        //      return;
+        // }
+        // const twitchUserId = twitchUsers[0].id; // We have the ID if needed later
+
+        // Save or update the link in the database
+        const existingLink = await TwitchLinkModel.findOne({ discordId: mentionedUser.id });
+
+        if (existingLink) {
+            if (existingLink.twitchUsername === twitchUsername) {
+                message.channel.send(`✅ Twitch link for **${mentionedUser.username}** is already set to **${twitchUsername}**.`);
+                return;
+            }
+            existingLink.twitchUsername = twitchUsername;
+            await existingLink.save();
+            message.channel.send(`✅ Updated Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
+        } else {
+            const newLink = new TwitchLinkModel({
+                discordId: mentionedUser.id,
+                twitchUsername: twitchUsername
+            });
+            await newLink.save();
+            message.channel.send(`✅ Set Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
+        }
+
+    } catch (error) {
+        console.error('Error setting Twitch link:', error);
+        message.channel.send(`❌ Failed to set Twitch link: ${error.message}`);
     }
 };
 
