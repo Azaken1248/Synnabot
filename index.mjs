@@ -4,6 +4,8 @@ import { commands } from './commands/commands.mjs';
 import './utils/discord/loadCommands.mjs';
 import connectDB from './utils/mongo/connection.mjs'; 
 import { startBirthdayLoop } from './utils/discord/birthdayChecker.mjs'
+import { startStreamLoop } from './utils/discord/streamChecker.mjs';
+
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const PREFIX = '!';
 
@@ -28,7 +30,8 @@ const startBot = async () => {
 
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
-    startBirthdayLoop(client); 
+    startBirthdayLoop(client);
+    startStreamLoop(client);
 });
 
 client.on('messageCreate', async (message) => {
