@@ -282,13 +282,12 @@ export const setTwitch = async (message, args) => {
 
     try {
         // Optional: Verify if the Twitch user actually exists using the API
-        // This adds extra API calls but improves data quality.
         // const twitchUsers = await getTwitchUsersByLogin([twitchUsername]);
         // if (twitchUsers.length === 0) {
         //      message.channel.send(`❌ Twitch user "${twitchUsername}" not found.`);
         //      return;
         // }
-        // const twitchUserId = twitchUsers[0].id; // We have the ID if needed later
+        // const twitchUserId = twitchUsers[0].id; 
 
         // Save or update the link in the database
         const existingLink = await TwitchLinkModel.findOne({ discordId: mentionedUser.id });
@@ -316,6 +315,73 @@ export const setTwitch = async (message, args) => {
     }
 };
 
+export const getLinkedStreamers = async (message) => {
+    const guild = message.guild;
+    if (!guild) {
+        message.channel.send("Guild Not Found!");
+        return;
+    }
+
+    try {
+        const twitchLinks = await TwitchLinkModel.find({});
+
+        if (twitchLinks.length === 0) {
+            message.channel.send("```No Twitch links found in the database.```");
+            return;
+        }
+
+        let maxDiscordNameLength = "Discord User (ID)".length;
+        const streamerData = [];
+
+        for (const link of twitchLinks) {
+            try {
+                const member = await guild.members.fetch(link.discordId);
+                const discordName = member.displayName || member.user.username;
+                const discordId = link.discordId;
+                const twitchUsername = link.twitchUsername;
+
+                const discordEntry = `${discordName} (${discordId})`;
+                streamerData.push({ discordEntry, twitchUsername });
+
+                if (discordEntry.length > maxDiscordNameLength) {
+                    maxDiscordNameLength = discordEntry.length;
+                }
+
+            } catch (error) {
+                console.error(`Could not fetch member with ID ${link.discordId}: ${error.message}`);
+                const discordId = link.discordId;
+                const twitchUsername = link.twitchUsername;
+                const discordEntry = `Unknown User (${discordId})`;
+                 streamerData.push({ discordEntry, twitchUsername });
+
+                 if (discordEntry.length > maxDiscordNameLength) {
+                    maxDiscordNameLength = discordEntry.length;
+                }
+            }
+        }
+
+        let response = "**Linked Streamers:**\n```";
+        const headerDiscord = "Discord User (ID)".padEnd(maxDiscordNameLength);
+        const headerTwitch = "Twitch Username";
+        response += `${headerDiscord} | ${headerTwitch}\n`;
+        response += "-".repeat(maxDiscordNameLength) + "---" + "-".repeat(headerTwitch.length) + "\n";
+
+
+        for (const data of streamerData) {
+            const paddedDiscord = data.discordEntry.padEnd(maxDiscordNameLength);
+            response += `${paddedDiscord} | ${data.twitchUsername}\n`;
+        }
+
+
+        response += "```";
+        message.channel.send(response);
+
+
+    } catch (error) {
+        console.error('Error fetching linked streamers:', error);
+        message.channel.send(`\`\`\`Failed to fetch linked streamers: ${error.message}\`\`\``);
+    }
+};
 
 
 
