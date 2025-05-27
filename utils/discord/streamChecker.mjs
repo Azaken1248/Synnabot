@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { EmbedBuilder } from 'discord.js';
 
 
-const STREAM_CHECK_INTERVAL = parseInt(process.env.STREAM_CHECK_INTERVAL_MINUTES || '5') * 60 * 1000;
+const STREAM_CHECK_INTERVAL = parseInt(process.env.STREAM_CHECK_INTERVAL_MINUTES || '1') * 60 * 1000;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 const LIVENOW_ROLE_NAME = process.env.LIVENOW_ROLE_NAME || '🔴 Live Now!';
 const LIVE_NOTIFICATION_CHANNEL_ID_ENV = process.env.LIVE_NOTIFICATION_CHANNEL_ID;
