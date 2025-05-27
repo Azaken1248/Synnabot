@@ -12,7 +12,7 @@ export const birthdayChecker = async (client) => {
 
     let channel;
     try {
-        channel = await client.channels.fetch('1354025035571925078');
+        channel = await client.channels.fetch('885916473422381139');
         if (!channel || !channel.isTextBased()) {
             console.warn("Birthday channel not found or not text-based.");
             return;
