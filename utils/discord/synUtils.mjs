@@ -1,8 +1,10 @@
 import BirthdayModel from '../../DB/schemas/birthdaySchema.mjs'; 
 import TimeZoneModel from '../../DB/schemas/timeZoneSchema.mjs';
 import TwitchLinkModel from '../../DB/schemas/twitchLinkSchema.mjs';
-import moment from 'moment-timezone';
 
+import moment from 'moment-timezone';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import 'dotenv/config';
 
 
 const monthMap = {
@@ -380,6 +382,50 @@ export const getLinkedStreamers = async (message) => {
     } catch (error) {
         console.error('Error fetching linked streamers:', error);
         message.channel.send(`\`\`\`Failed to fetch linked streamers: ${error.message}\`\`\``);
+    }
+};
+
+export const ask = async (message, args) => {
+    const question = args.join(' '); 
+
+    if (!question) {
+        message.channel.send('❌ Usage: `!ask <your question>`');
+        return;
+    }
+
+    const apiKey = process.env.GOOGLE_API; 
+
+    if (!apiKey) {
+        console.error("GOOGLE_API environment variable not set.");
+        message.channel.send('```Error: Gemini API key not configured on the server.```');
+        return;
+    }
+
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        await message.channel.sendTyping();
+
+        const result = await model.generateContent(question);
+
+        const response = await result.response.text();
+
+        const responseChunks = response.match(/[\s\S]{1,1900}/g) || []; 
+
+        for (const chunk of responseChunks) {
+            await message.channel.send(chunk);
+        }
+
+    } catch (error) {
+        console.error('Error interacting with Gemini API:', error);
+        message.channel.send(`\`\`\`Failed to get response: ${error.message}\`\`\``);
+        if (error.message.includes('429')) {
+             message.channel.send("Seems like I'm getting too many requests. Please try again later.");
+        } else if (error.message.includes('403')) {
+             message.channel.send("There was an authentication issue with the API. Check the API key.");
+        }
     }
 };
 
