@@ -19,6 +19,9 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 | `!birthday`     | Gets birthday of a user                                  | `!birthday @User`                          | Everyone    |
 | `!settimezone`  | Sets timezone for a user                                 | `!settimezone @User UTC+6:30`              | Mod Only    |
 | `!time`         | Gets the current time for a user based on their timezone | `!time @User`                              | Everyone    |
+| `!settwitch`    | Set the twitch username of user and link it              | `!settwitch @User <username>`              | Mod Only    |
+| `!streamlinks`  | Get the list of streamers and their linked twitch IDs    | `!streamlinks`                             | Everyone    |
+| `!ask`          | Ask a question to Gemini AI                              | `!ask <Question>`                          | Everyone    |
 
 ---
 
@@ -71,4 +74,38 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 ```bash
 !time @Syn
 # ➜ 🕒 Time for Syn: Sunday, April 6th 2025, 4:15 PM (UTC+6:30)
+```
+
+---
+
+### `!settwitch`
+
+```bash
+!settwitch @Syn St_Synna
+# ➜ ✅ Updated Twitch link for Syn to St_Synna.
+```
+
+---
+
+### `!streamlinks`
+
+```bash
+!streamlinks
+# ➜ (below)
+```
+```
+Discord User (ID)             | Twitch Username
+-----------------------------------------------
+azakenR (867113282929557514)  | azakenr
+Syn (953502362474000434)      | st_synna
+kyoudai7 (972582587996455022) | kyoudai7
+```
+
+---
+
+### `!ask`
+
+```bash
+!ask What is the capital of France
+# ➜ The capital of France is Paris
 ```
