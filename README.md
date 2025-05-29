@@ -1,4 +1,3 @@
-
 # Synnabot Commands Documentation
 
 Welcome to the official documentation for your Discord bot. Here you'll find a comprehensive list of commands, their usage, and descriptions.
@@ -19,6 +18,9 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 | `!birthday`     | Gets birthday of a user                                  | `!birthday @User`                          | Everyone    |
 | `!settimezone`  | Sets timezone for a user                                 | `!settimezone @User UTC+6:30`              | Mod Only    |
 | `!time`         | Gets the current time for a user based on their timezone | `!time @User`                              | Everyone    |
+| `!settwitch`    | Set the twitch username of user                          | `!settwitch @User YourTwitchName`          | Mod Only    |
+| `!streamlinks`  | Get the list of streamers and their linked twitch IDs    | `!streamlinks`                             | Everyone    |
+| `!ask`          | Ask a question to Gemini AI                              | `!ask What is the capital of France?`      | Everyone    |
 
 ---
 
@@ -35,8 +37,7 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 
 ```bash
 !hello
-# ➜ hello @Syn
-```
+# ➜ hello @Syn```
 
 
 ### `!add`
@@ -71,4 +72,33 @@ Welcome to the official documentation for your Discord bot. Here you'll find a c
 ```bash
 !time @Syn
 # ➜ 🕒 Time for Syn: Sunday, April 6th 2025, 4:15 PM (UTC+6:30)
+```
+
+---
+
+### `!settwitch`
+
+```bash
+!settwitch @User YourTwitchName
+# ➜ Twitch username for User set to YourTwitchName!
+```
+
+---
+
+### `!streamlinks`
+
+```bash
+!streamlinks
+# ➜ Here are the linked streamers and their Twitch channels:
+# ➜ User1: twitch.tv/TwitchName1
+# ➜ User2: twitch.tv/TwitchName2
+```
+
+---
+
+### `!ask`
+
+```bash
+!ask What is the capital of France?
+# ➜ The capital of France is Paris.
 ```
