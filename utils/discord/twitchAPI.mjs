@@ -23,14 +23,14 @@ const getAppAccessToken = async () => {
         }
         const data = await response.json();
         accessToken = data.access_token;
-        tokenExpiry = Date.now() + (data.expires_in * 1000) - 5000; 
+        tokenExpiry = Date.now() + (data.expires_in * 1000) - 5000;
         console.log('Successfully obtained new Twitch App Access Token.');
         return accessToken;
     } catch (error) {
         console.error('Error getting Twitch App Access Token:', error);
         accessToken = null;
         tokenExpiry = 0;
-        throw error; 
+        throw error;
     }
 };
 
@@ -95,7 +95,7 @@ export const getLiveStreamsByUserIds = async (userIds) => {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`Twitch /streams request failed: ${response.status} - ${errorText}`);
-                continue; 
+                continue;
             }
 
             const data = await response.json();
