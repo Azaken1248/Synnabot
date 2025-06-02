@@ -117,7 +117,7 @@ const checkStreams = async (client) => {
         }
 
         const currentlyLiveTwitchUserIds = new Set(liveStreams.map(stream => stream.user_id));
-        console.log('[DEBUG] currentlyLiveTwitchUserIds set:', currentlyLiveTwitchUserIds); // Log the set content
+        console.log('[DEBUG] currentlyLiveTwitchUserIds set:', currentlyLiveTwitchUserIds);
 
 
         if (liveRole) {
@@ -165,10 +165,10 @@ const checkStreams = async (client) => {
         }
 
 
-        const previousLiveDiscordIds = new Set(currentlyLiveDiscordIds);
+                const previousLiveDiscordIds = new Set(currentlyLiveDiscordIds);
         const nextLiveDiscordIds = new Set();
 
-        var wentLiveDiscordIds = [];
+        let wentLiveDiscordIds = [];
         const wentOfflineDiscordIds = [];
 
 
@@ -180,7 +180,7 @@ const checkStreams = async (client) => {
 
 
             if (!twitchUser) {
-                 console.warn(`[DEBUG] Twitch user not found for login: ${link.twitchUsername}`); // Added warning for clarity
+                 console.warn(`[DEBUG] Twitch user not found for login: ${link.twitchUsername}`); 
                  continue;
             }
 
@@ -196,7 +196,7 @@ const checkStreams = async (client) => {
 
             if (isLiveNow) {
                 nextLiveDiscordIds.add(link.discordId);
-                console.log(`[DEBUG] Added Discord ID ${link.discordId} to nextLiveDiscordIds.`); // Log when adding
+                console.log(`[DEBUG] Added Discord ID ${link.discordId} to nextLiveDiscordIds.`); 
             }
         }
 
@@ -206,23 +206,19 @@ const checkStreams = async (client) => {
 
 
 
-        for (const discordId of nextLiveDiscordIds) {
-             if (!previousLiveDiscordIds.has(discordId)) {
-                 const link = links.find(l => l.discordId === discordId);
-                 const twitchUser = twitchUsers.find(u => u.login.toLowerCase() === link.twitchUsername.toLowerCase()); 
-                 wentLiveDiscordIds.push({ discordId: discordId, twitchUsername: link.twitchUsername, streamInfo: streamInfo });
-             }
-        }
-
          const wentLiveDiscordIdsCorrected = [];
          for (const discordId of nextLiveDiscordIds) {
              if (!previousLiveDiscordIds.has(discordId)) {
-                 const link = links.find(l => l.discordId === discordId); 
-                 if (link) { 
-                     const twitchUser = twitchUsers.find(u => u.login.toLowerCase() === link.twitchUsername.toLowerCase()); 
-                      if (twitchUser) { 
-                        const streamInfo = liveStreams.find(s => s.user_id === twitchUser.id); 
-                        wentLiveDiscordIdsCorrected.push({ discordId: discordId, twitchUsername: link.twitchUsername, streamInfo: streamInfo });
+                 const link = links.find(l => l.discordId === discordId);
+                 if (link) {
+                     const twitchUser = twitchUsers.find(u => u.login.toLowerCase() === link.twitchUsername.toLowerCase());
+                      if (twitchUser) {
+                        const streamInfo = liveStreams.find(s => s.user_id === twitchUser.id);
+                        if (streamInfo) {
+                            wentLiveDiscordIdsCorrected.push({ discordId: discordId, twitchUsername: link.twitchUsername, streamInfo: streamInfo });
+                        } else {
+                            console.warn(`[DEBUG] Stream info not found for newly live Twitch user: ${twitchUser.login} (ID: ${twitchUser.id})`);
+                        }
                       } else {
                            console.warn(`[DEBUG] Could not find Twitch user details for newly live Discord ID: ${discordId} (Username: ${link.twitchUsername})`);
                       }
@@ -231,12 +227,18 @@ const checkStreams = async (client) => {
                  }
              }
          }
-         wentLiveDiscordIds = wentLiveDiscordIdsCorrected;
+         wentLiveDiscordIds = wentLiveDiscordIdsCorrected; 
+
 
          for (const discordId of previousLiveDiscordIds) {
              if (!nextLiveDiscordIds.has(discordId)) {
                   const link = links.find(l => l.discordId === discordId);
-                  wentOfflineDiscordIds.push({ discordId: discordId, twitchUsername: link.twitchUsername });
+
+                  if (link) {
+                     wentOfflineDiscordIds.push({ discordId: discordId, twitchUsername: link.twitchUsername });
+                  } else {
+                     console.warn(`[DEBUG] Could not find link details for newly offline Discord ID: ${discordId}`);
+                  }
              }
          }
 
@@ -244,7 +246,6 @@ const checkStreams = async (client) => {
         currentlyLiveDiscordIds = nextLiveDiscordIds;
 
         console.log(`Determined newly Live: ${wentLiveDiscordIds.length}, Determined newly Offline: ${wentOfflineDiscordIds.length}`);
-
 
                 for (const { discordId, twitchUsername, streamInfo } of wentLiveDiscordIds) {
             try {
@@ -263,9 +264,7 @@ const checkStreams = async (client) => {
                     if (notificationChannelEnv || additionalNotificationChannel) {
                         console.log(`[DEBUG] Notification channels exist, preparing embed.`);
 
-                        // --- NEW DEBUG LOG FOR streamInfo ---
                         console.log(`[DEBUG] streamInfo object for ${twitchUsername}:`, streamInfo);
-                        // --- END NEW DEBUG LOG ---
 
                         const embed = new EmbedBuilder()
                             .setColor('#6441A4')
@@ -332,7 +331,6 @@ const checkStreams = async (client) => {
                          console.log(`[DEBUG] Member has role and went offline, attempting to remove.`); 
                         await member.roles.remove(liveRole).catch(console.error);
                         console.log(`Removed "${LIVENOW_ROLE_NAME}" role from ${member.user.tag} (${discordId}).`);
-                         // Optional: Send offline notification (would also typically be an embed)
                          // if (notificationChannelEnv || additionalNotificationChannel) {
                          //    const offlineEmbed = new EmbedBuilder()
                          //        .setColor('#999999') // Grey color for offline
