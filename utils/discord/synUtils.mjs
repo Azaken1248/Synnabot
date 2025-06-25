@@ -1,10 +1,32 @@
-import BirthdayModel from '../../DB/schemas/birthdaySchema.mjs'; 
+// utils/discord/synUtils.mjs
+import BirthdayModel from '../../DB/schemas/birthdaySchema.mjs';
 import TimeZoneModel from '../../DB/schemas/timeZoneSchema.mjs';
 import TwitchLinkModel from '../../DB/schemas/twitchLinkSchema.mjs';
 
 import moment from 'moment-timezone';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import 'dotenv/config';
+
+const isMessage = (context) => context.channel && context.author;
+const isInteraction = (context) => context.isChatInputCommand;
+
+const sendReply = async (context, content, isEphemeral = false) => {
+    if (isMessage(context)) {
+        await context.channel.send(content);
+    } else if (isInteraction(context)) {
+        if (context.deferred || context.replied) {
+             await context.editReply({ content, ephemeral: isEphemeral });
+        } else {
+             await context.reply({ content, ephemeral: isEphemeral });
+        }
+    }
+};
+
+const deferReply = async (context, isEphemeral = false) => {
+    if (isInteraction(context) && !context.deferred && !context.replied) {
+        await context.deferReply({ ephemeral: isEphemeral });
+    }
+};
 
 
 const monthMap = {
@@ -19,47 +41,62 @@ const monthMap = {
     9 : 'Sep',
     10 : 'Oct',
     11 : 'Nov',
-    12 : 'Dec'  
+    12 : 'Dec'
 }
 
 const isValidUTCOffset = (input) => {
     const match = input.match(/^UTC([+-])(\d{1,2})(?::(00|15|30|45))?$/);
     if (!match) return false;
-    
+
     const hour = parseInt(match[2]);
-    return hour >= 0 && hour <= 14; 
+    return hour >= 0 && hour <= 14;
 };
 
 
 
-export const ping = (message) => {
-    message.channel.send('Pong!');
+export const ping = async (context, args) => {
+     await sendReply(context, 'Pong!');
 }
 
-export const greet = (message) => {
-    message.channel.send(`Hello, ${message.author.username}!`);
+export const greet = async (context, args) => {
+    const username = isMessage(context) ? context.author.username : context.user.username;
+    await sendReply(context, `Hello, ${username}!`);
 }
 
-export const add = (message, args) => {
-    if (args.length < 2) {
-        message.channel.send('Please provide two numbers.');
+export const add = async (context, args) => {
+    let num1, num2;
+
+    if (isMessage(context)) {
+        if (args.length < 2) {
+            await sendReply(context, 'Please provide two numbers. Usage: `!add 5 10`');
+            return;
+        }
+        num1 = parseFloat(args[0]);
+        num2 = parseFloat(args[1]);
+    } else if (isInteraction(context)) {
+        num1 = context.options.getNumber('num1');
+        num2 = context.options.getNumber('num2');
+    } else {
+        await sendReply(context, 'Invalid context.');
         return;
     }
-    const num1 = parseFloat(args[0]);
-    const num2 = parseFloat(args[1]);
+
     if (isNaN(num1) || isNaN(num2)) {
-        message.channel.send('Invalid numbers.');
+        await sendReply(context, 'Invalid numbers.');
         return;
     }
-    message.channel.send(`The sum is ${num1 + num2}`);
+
+    await sendReply(context, `The sum is ${num1 + num2}`);
 }
 
-export const listStreamers = async (message) => {
-    const guild = message.guild;
+export const listStreamers = async (context) => {
+    const guild = context.guild;
     if (!guild) {
-        message.channel.send("```Guild Not Found!```");
+        await sendReply(context, "```Guild Not Found!```");
         return null;
     }
+
+    await deferReply(context); 
 
     try {
         const members = await guild.members.fetch();
@@ -73,122 +110,176 @@ export const listStreamers = async (message) => {
             streaming: member.presence?.activities.some(a => a.type === 'STREAMING')
         }));
 
-        const streamers = cleanMembers.filter(member => 
-            member.roles.includes('🎬 Streamer') 
+        const streamers = cleanMembers.filter(member =>
+            member.roles.includes('🎬 Streamer')
         );
 
         if (streamers.length === 0) {
-            message.channel.send("```No members with Streamer role found```");
+            await sendReply(context, "```No members with Streamer role found```");
             return null;
         }
 
-        const streamerList = streamers.map(member => 
+        const streamerList = streamers.map(member =>
             `${member.displayName || member.username} (ID: ${member.id})`
         ).join('\n');
 
-        message.channel.send(`**Streamer Role Members (${streamers.length}):**\n\`\`\`${streamerList}\`\`\``);
-        console.log(streamers);
+        await sendReply(context, `**Streamer Role Members (${streamers.length}):**\n\`\`\`${streamerList}\`\`\``);
+        console.log(streamers); 
         return streamers;
 
     } catch (error) {
         console.error(error);
-        message.channel.send(`\`\`\`Error: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Error: ${error.message}\`\`\``);
         return null;
     }
 };
 
 
-export const setBirthday = async (message, args) => {
-    const authorMember = message.guild.members.cache.get(message.author.id);
-    
-    if (!authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
-        message.channel.send("❌ You don't have permission to use this command. Only **💥 Mod** can set birthdays.");
+export const setBirthday = async (context, args) => {
+    const guild = context.guild;
+    const authorMember = isMessage(context)
+        ? guild.members.cache.get(context.author.id)
+        : context.member; 
+
+    if (!authorMember || !authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
+        await sendReply(context, "❌ You don't have permission to use this command. Only **💥 Mod** can set birthdays.", isInteraction(context));
         return;
     }
 
-    if (args.length < 3 || !message.mentions.users.size) {
-        message.channel.send('!setbirthday @MentionUser DD M (e.g.  !setbirthday @Syn 29 3)`');
+    await deferReply(context); 
+
+    let mentionedUser, day, month;
+
+    if (isMessage(context)) {
+        if (args.length < 3 || !context.mentions.users.size) {
+            await sendReply(context, 'Usage: `!setbirthday @MentionUser DD M` (e.g.  `!setbirthday @Syn 29 3`)');
+            return;
+        }
+        mentionedUser = context.mentions.users.first();
+        day = args[1];
+        month = args[2];
+    } else if (isInteraction(context)) {
+        mentionedUser = context.options.getUser('user');
+        day = context.options.getInteger('day');
+        month = context.options.getInteger('month');
+    } else {
+         await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const mentionedUser = message.mentions.users.first();
-    const day = args[1];
-    const month = args[2];
+     if (!mentionedUser) {
+         await sendReply(context, '❌ Could not find the mentioned user.', isInteraction(context));
+         return;
+     }
 
-    if (!/^\d{1,2}$/.test(day) || !/^\d{1,2}$/.test(month)) {
-        message.channel.send('❌ Day and month must be valid numbers.');
+    if (typeof day !== 'number' || typeof month !== 'number' || day < 1 || day > 31 || month < 1 || month > 12) {
+        await sendReply(context, '❌ Day must be between 1-31 and Month between 1-12.', isInteraction(context));
         return;
     }
+
 
     try {
         const existing = await BirthdayModel.findOne({ discordId: mentionedUser.id });
 
         if (existing) {
-            existing.day = day;
-            existing.month = parseInt(month) + "";
+            existing.day = day.toString(); 
+            existing.month = month.toString(); 
             await existing.save();
-            message.channel.send(`🎉 Updated birthday for **${mentionedUser.username}** to **${parseInt(day)} ${monthMap[parseInt(month)]}**`);
+            await sendReply(context, `🎉 Updated birthday for **${mentionedUser.username}** to **${day} ${monthMap[month]}**`);
         } else {
             const newBirthday = new BirthdayModel({
                 discordId: mentionedUser.id,
-                day,
-                month: parseInt(month) + ""
+                day: day.toString(),
+                month: month.toString()
             });
             await newBirthday.save();
-            message.channel.send(`🎉 Set birthday for ${mentionedUser.username} to ${parseInt(day)} ${monthMap[parseInt(month)]}`);
+            await sendReply(context, `🎉 Set birthday for ${mentionedUser.username} to ${day} ${monthMap[month]}`);
         }
     } catch (error) {
         console.error('Error setting birthday:', error);
-        message.channel.send(`\`\`\`Failed to set birthday: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Failed to set birthday: ${error.message}\`\`\``);
     }
 };
 
-export const getBirthday = async (message, _args) => {
-    if (!message.mentions.users.size) {
-        message.channel.send('Usage: `!birthday @user`');
+export const getBirthday = async (context, args) => {
+    let mentionedUser;
+
+    if (isMessage(context)) {
+        if (!context.mentions.users.size) {
+            await sendReply(context, 'Usage: `!birthday @user`');
+            return;
+        }
+        mentionedUser = context.mentions.users.first();
+    } else if (isInteraction(context)) {
+        mentionedUser = context.options.getUser('user');
+    } else {
+        await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const mentionedUser = message.mentions.users.first();
+     if (!mentionedUser) {
+         await sendReply(context, '❌ Could not find the mentioned user.', isInteraction(context));
+         return;
+     }
+
+    await deferReply(context);
 
     try {
         const record = await BirthdayModel.findOne({ discordId: mentionedUser.id });
 
         if (!record) {
-            message.channel.send(`❌ No birthday found for ${mentionedUser.username}.`);
+            await sendReply(context, `❌ No birthday found for **${mentionedUser.username}**. Use \`!setbirthday\` to set one.`, isInteraction(context));
             return;
         }
 
-        message.channel.send(`🎂 ${mentionedUser.username}'s birthday is on **${parseInt(record.day)} ${monthMap[parseInt(record.month)]}**`);
+        await sendReply(context, `🎂 **${mentionedUser.username}**'s birthday is on **${parseInt(record.day)} ${monthMap[parseInt(record.month)]}**`);
     } catch (error) {
         console.error('Error fetching birthday:', error);
-        message.channel.send(`\`\`\`Failed to fetch birthday: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Failed to fetch birthday: ${error.message}\`\`\``);
     }
 };
 
-export const setTimezone = async (message, args) => {
-    const authorMember = message.guild.members.cache.get(message.author.id);
-    
-    if (!authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
-        message.channel.send("❌ You don't have permission to use this command. Only **💥 Mod** can set timezones.");
+export const setTimezone = async (context, args) => {
+    const guild = context.guild;
+     const authorMember = isMessage(context)
+        ? guild.members.cache.get(context.author.id)
+        : context.member; 
+
+    if (!authorMember || !authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
+        await sendReply(context, "❌ You don't have permission to use this command. Only **💥 Mod** can set timezones.", isInteraction(context));
         return;
     }
 
-    if (args.length < 2 || !message.mentions.users.size) {
-        message.channel.send('❌ Usage: `!settimezone @User <timezone>` (e.g. `!settimezone @Syn Asia/Kolkata` or `UTC+5:30`)');
+     await deferReply(context); 
+
+    let mentionedUser, timezone;
+
+    if (isMessage(context)) {
+        if (args.length < 2 || !context.mentions.users.size) {
+            await sendReply(context, '❌ Usage: `!settimezone @User <timezone>` (e.g. `!settimezone @Syn Asia/Kolkata` or `UTC+5:30`)');
+            return;
+        }
+        mentionedUser = context.mentions.users.first();
+        timezone = args[1];
+    } else if (isInteraction(context)) {
+        mentionedUser = context.options.getUser('user');
+        timezone = context.options.getString('timezone');
+    } else {
+        await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const mentionedUser = message.mentions.users.first();
-    const timezone = args[1];
+     if (!mentionedUser) {
+         await sendReply(context, '❌ Could not find the mentioned user.', isInteraction(context));
+         return;
+     }
 
     const validTimezones = Intl.supportedValuesOf?.('timeZone') || [];
     const isIANA = validTimezones.includes(timezone);
-
     const isUTC = isValidUTCOffset(timezone);
 
     if (!isIANA && !isUTC) {
-        message.channel.send(`❌ Invalid timezone: \`${timezone}\`. Use a valid IANA name (e.g. Asia/Kolkata) or UTC offset (e.g. UTC+5:30)`);
+        await sendReply(context, `❌ Invalid timezone: \`${timezone}\`. Use a valid IANA name (e.g. Asia/Kolkata) or UTC offset (e.g. UTC+5:30)`, isInteraction(context));
         return;
     }
 
@@ -198,137 +289,185 @@ export const setTimezone = async (message, args) => {
         if (existing) {
             existing.timezone = timezone;
             await existing.save();
-            message.channel.send(`🌍 Updated timezone for **${mentionedUser.username}** to **${timezone}**`);
+            await sendReply(context, `🌍 Updated timezone for **${mentionedUser.username}** to **${timezone}**`);
         } else {
             const newTimezone = new TimeZoneModel({
                 discordId: mentionedUser.id,
                 timezone
             });
             await newTimezone.save();
-            message.channel.send(`🌍 Set timezone for **${mentionedUser.username}** to **${timezone}**`);
+            await sendReply(context, `🌍 Set timezone for **${mentionedUser.username}** to **${timezone}**`);
         }
     } catch (error) {
         console.error('Error setting timezone:', error);
-        message.channel.send(`\`\`\`Failed to set timezone: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Failed to set timezone: ${error.message}\`\`\``);
     }
 };
 
-export const getTime = async (message) => {
-    if (!message.mentions.users.size) {
-        message.channel.send('❌ Usage: `!time @User`');
+export const getTime = async (context, args) => {
+    let mentionedUser;
+
+    if (isMessage(context)) {
+        if (!context.mentions.users.size) {
+            await sendReply(context, '❌ Usage: `!time @User`');
+            return;
+        }
+        mentionedUser = context.mentions.users.first();
+    } else if (isInteraction(context)) {
+         mentionedUser = context.options.getUser('user');
+    } else {
+         await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const mentionedUser = message.mentions.users.first();
+    if (!mentionedUser) {
+         await sendReply(context, '❌ Could not find the mentioned user.', isInteraction(context));
+         return;
+     }
+
+    await deferReply(context);
 
     try {
         const userTimeData = await TimeZoneModel.findOne({ discordId: mentionedUser.id });
         if (!userTimeData) {
-            message.channel.send(`❌ No timezone found for **${mentionedUser.username}**. Use \`!settimezone\` to set one.`);
+            await sendReply(context, `❌ No timezone found for **${mentionedUser.username}**. Use \`!settimezone\` to set one.`, isInteraction(context));
             return;
         }
 
-        const userTimezone = userTimeData.timezone;
-        const now = new Date();
+       const userTimezone = userTimeData.timezone;
 
-        const parseTimezone = (tz) => {
-            if (Intl.supportedValuesOf('timeZone')?.includes(tz)) {
-                return moment.tz(now, tz);
-            } else if (tz.startsWith('UTC')) {
-                const match = tz.match(/^UTC([+-])(\d{1,2})(?::(00|15|30|45))?$/);
-                if (!match) throw new Error('Invalid UTC offset format');
-                const sign = match[1] === '+' ? 1 : -1;
-                const hours = parseInt(match[2]) * sign;
-                const minutes = parseInt(match[3] || '0') * sign;
-                return moment.utc(now).add(hours, 'hours').add(minutes, 'minutes');
-            } else {
-                throw new Error('Unrecognized timezone format');
+
+        const parseTimezone = (tzString) => {
+
+            if (Intl.supportedValuesOf('timeZone')?.includes(tzString)) {
+                 return moment.tz(tzString);
             }
+
+            
+            if (tzString.startsWith('UTC')) {
+                const match = tzString.match(/^UTC([+-])(\d{1,2})(?::(00|15|30|45))?$/);
+                if (match && isValidUTCOffset(tzString)) { 
+                    const sign = match[1] === '+' ? 1 : -1;
+                    const hours = parseInt(match[2]);
+                    const minutes = parseInt(match[3] || '0');
+                    const totalMinutesOffset = sign * (hours * 60 + minutes);
+
+                    return moment.utc().utcOffset(totalMinutesOffset);
+
+                }
+                throw new Error(`Invalid UTC offset format: ${tzString}`);
+            }
+
+        
+            throw new Error(`Unrecognized timezone format: ${tzString}`);
         };
 
+        
         const userTime = parseTimezone(userTimezone);
 
-        message.channel.send(`🕒 Time for **${mentionedUser.username}**: **${userTime.format('dddd, MMMM Do YYYY, h:mm A')}** (${userTimezone})`);
+        
+        await sendReply(context, `🕒 Time for **${mentionedUser.username}**: **${userTime.format('dddd, MMMM Do YYYY, h:mm A')}** (${userTimezone})`);
+
     } catch (error) {
         console.error('Error fetching time:', error);
-        message.channel.send(`\`\`\`Failed to fetch time: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Failed to fetch time: ${error.message}\`\`\``);
     }
 };
 
-export const setTwitch = async (message, args) => {
-    const authorMember = message.guild.members.cache.get(message.author.id);
+export const setTwitch = async (context, args) => {
+    const guild = context.guild;
+    const authorMember = isMessage(context)
+       ? guild.members.cache.get(context.author.id)
+       : context.member; 
+
     if (!authorMember || !authorMember.roles.cache.some(role => role.name === '💥 Mod')) {
-        message.channel.send("❌ You don't have permission to use this command. Only **💥 Mod** can set Twitch links.");
+        await sendReply(context, "❌ You don't have permission to use this command. Only **💥 Mod** can set Twitch links.", isInteraction(context));
         return;
     }
 
-    if (args.length < 2 || !message.mentions.users.size) {
-        message.channel.send('❌ Usage: `!settwitch @MentionUser twitch_username`');
+     await deferReply(context); 
+
+
+    let mentionedUser, twitchUsername;
+
+    if (isMessage(context)) {
+        if (args.length < 2 || !context.mentions.users.size) {
+            await sendReply(context, '❌ Usage: `!settwitch @MentionUser twitch_username`');
+            return;
+        }
+        mentionedUser = context.mentions.users.first();
+        twitchUsername = args[1 + context.mentions.users.size - 1];
+    } else if (isInteraction(context)) {
+        mentionedUser = context.options.getUser('user');
+        twitchUsername = context.options.getString('username');
+    } else {
+         await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const mentionedUser = message.mentions.users.first();
+     if (!mentionedUser) {
+         await sendReply(context, '❌ Could not find the mentioned user.', isInteraction(context));
+         return;
+     }
+     if (!twitchUsername) { 
+         await sendReply(context, '❌ Please provide the Twitch username.', isInteraction(context));
+         return;
+     }
 
-    const twitchUsername = args[1 + message.mentions.users.size - 1]; 
-
-
-    if (!twitchUsername) {
-        message.channel.send('❌ Please provide the Twitch username. Usage: `!settwitch @MentionUser twitch_username`');
-        return;
-    }
 
     if (!/^[a-zA-Z0-9_]+$/.test(twitchUsername)) {
-        message.channel.send('❌ Invalid Twitch username format. Twitch usernames can only contain letters, numbers, and underscores.');
+        await sendReply(context, '❌ Invalid Twitch username format. Twitch usernames can only contain letters, numbers, and underscores.', isInteraction(context));
         return;
     }
 
     try {
-        // Optional: Verify if the Twitch user actually exists using the API
         // const twitchUsers = await getTwitchUsersByLogin([twitchUsername]);
         // if (twitchUsers.length === 0) {
-        //      message.channel.send(`❌ Twitch user "${twitchUsername}" not found.`);
+        //      await sendReply(context, `❌ Twitch user "${twitchUsername}" not found.`, isInteraction(context));
         //      return;
         // }
-        // const twitchUserId = twitchUsers[0].id; 
+        // const twitchUserId = twitchUsers[0].id;
 
         // Save or update the link in the database
         const existingLink = await TwitchLinkModel.findOne({ discordId: mentionedUser.id });
 
         if (existingLink) {
-            if (existingLink.twitchUsername === twitchUsername) {
-                message.channel.send(`✅ Twitch link for **${mentionedUser.username}** is already set to **${twitchUsername}**.`);
+            if (existingLink.twitchUsername.toLowerCase() === twitchUsername.toLowerCase()) {
+                 await sendReply(context, `✅ Twitch link for **${mentionedUser.username}** is already set to **${twitchUsername}**.`);
                 return;
             }
             existingLink.twitchUsername = twitchUsername;
             await existingLink.save();
-            message.channel.send(`✅ Updated Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
+            await sendReply(context, `✅ Updated Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
         } else {
             const newLink = new TwitchLinkModel({
                 discordId: mentionedUser.id,
                 twitchUsername: twitchUsername
             });
             await newLink.save();
-            message.channel.send(`✅ Set Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
+             await sendReply(context, `✅ Set Twitch link for **${mentionedUser.username}** to **${twitchUsername}**.`);
         }
 
     } catch (error) {
         console.error('Error setting Twitch link:', error);
-        message.channel.send(`❌ Failed to set Twitch link: ${error.message}`);
+        await sendReply(context, `❌ Failed to set Twitch link: ${error.message}`);
     }
 };
 
-export const getLinkedStreamers = async (message) => {
-    const guild = message.guild;
+export const getLinkedStreamers = async (context) => {
+    const guild = context.guild;
     if (!guild) {
-        message.channel.send("Guild Not Found!");
+        await sendReply(context, "Guild Not Found!");
         return;
     }
+
+    await deferReply(context); 
 
     try {
         const twitchLinks = await TwitchLinkModel.find({});
 
         if (twitchLinks.length === 0) {
-            message.channel.send("```No Twitch links found in the database.```");
+            await sendReply(context, "```No Twitch links found in the database.```");
             return;
         }
 
@@ -374,62 +513,94 @@ export const getLinkedStreamers = async (message) => {
             response += `${paddedDiscord} | ${data.twitchUsername}\n`;
         }
 
-
         response += "```";
-        message.channel.send(response);
-
+        await sendReply(context, response);
 
     } catch (error) {
         console.error('Error fetching linked streamers:', error);
-        message.channel.send(`\`\`\`Failed to fetch linked streamers: ${error.message}\`\`\``);
+        await sendReply(context, `\`\`\`Failed to fetch linked streamers: ${error.message}\`\`\``);
     }
 };
 
-export const ask = async (message, args) => {
-    const question = args.join(' '); 
+export const ask = async (context, args) => {
+    let question;
 
-    if (!question) {
-        message.channel.send('❌ Usage: `!ask <your question>`');
+    if (isMessage(context)) {
+        question = args.join(' ');
+        if (!question) {
+            await sendReply(context, '❌ Usage: `!ask <your question>`');
+            return;
+        }
+    } else if (isInteraction(context)) {
+         question = context.options.getString('question');
+         if (!question) { 
+              await sendReply(context, '❌ Please provide a question.', isInteraction(context));
+              return;
+         }
+    } else {
+        await sendReply(context, 'Invalid context.');
         return;
     }
 
-    const apiKey = process.env.GOOGLE_API; 
+    const apiKey = process.env.GOOGLE_API;
 
     if (!apiKey) {
         console.error("GOOGLE_API environment variable not set.");
-        message.channel.send('```Error: Gemini API key not configured on the server.```');
+        await sendReply(context, '```Error: Gemini API key not configured on the server.```');
         return;
     }
+
+    await deferReply(context); 
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
 
+
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        await message.channel.sendTyping();
+        if (isMessage(context)) {
+             await context.channel.sendTyping();
+        }
+
 
         const result = await model.generateContent(question);
 
         const response = await result.response.text();
 
-        const responseChunks = response.match(/[\s\S]{1,1900}/g) || []; 
+         if (!response) {
+             await sendReply(context, "I couldn't generate a response for that question.", isInteraction(context));
+             return;
+         }
 
-        for (const chunk of responseChunks) {
-            await message.channel.send(chunk);
+        const responseChunks = response.match(/[\s\S]{1,1900}/g) || [];
+
+        if (isInteraction(context)) {
+             await context.editReply(responseChunks[0]);
+             for (let i = 1; i < responseChunks.length; i++) {
+                 await context.followUp(responseChunks[i]);
+             }
+        } else { 
+             for (const chunk of responseChunks) {
+                 await context.channel.send(chunk);
+             }
         }
+
 
     } catch (error) {
         console.error('Error interacting with Gemini API:', error);
-        message.channel.send(`\`\`\`Failed to get response: ${error.message}\`\`\``);
+         if (isInteraction(context) && (context.deferred || context.replied)) {
+              await context.editReply(`\`\`\`Failed to get response: ${error.message}\`\`\``);
+         } else {
+              await sendReply(context, `\`\`\`Failed to get response: ${error.message}\`\`\``);
+         }
+
+
         if (error.message.includes('429')) {
-             message.channel.send("Seems like I'm getting too many requests. Please try again later.");
+             const followUpOrEdit = isInteraction(context) && (context.deferred || context.replied) ? context.followUp : sendReply;
+             await followUpOrEdit(context, "Seems like I'm getting too many requests. Please try again later.", isInteraction(context));
         } else if (error.message.includes('403')) {
-             message.channel.send("There was an authentication issue with the API. Check the API key.");
+             const followUpOrEdit = isInteraction(context) && (context.deferred || context.replied) ? context.followUp : sendReply;
+             await followUpOrEdit(context, "There was an authentication issue with the API. Check the API key.", isInteraction(context));
         }
     }
 };
-
-
-
-
-
