@@ -523,84 +523,76 @@ export const getLinkedStreamers = async (context) => {
 };
 
 export const ask = async (context, args) => {
-    let question;
+    const question = isMessage(context)
+        ? args.join(' ')
+        : context.options.getString('question');
 
-    if (isMessage(context)) {
-        question = args.join(' ');
-        if (!question) {
-            await sendReply(context, '❌ Usage: `!ask <your question>`');
-            return;
-        }
-    } else if (isInteraction(context)) {
-         question = context.options.getString('question');
-         if (!question) { 
-              await sendReply(context, '❌ Please provide a question.', isInteraction(context));
-              return;
-         }
-    } else {
-        await sendReply(context, 'Invalid context.');
+    if (!question) {
+        await sendReply(context, '❌ Please provide a question.');
         return;
     }
 
     const apiKey = process.env.GOOGLE_API;
-
     if (!apiKey) {
         console.error("GOOGLE_API environment variable not set.");
         await sendReply(context, '```Error: Gemini API key not configured on the server.```');
         return;
     }
 
-    await deferReply(context); 
+    const botspamChannelId = '1378287373233819658';
+    const user = isMessage(context) ? context.author : context.user;
+
+    const botspamChannel = context.client.channels.cache.get(botspamChannelId);
+    if (!botspamChannel || botspamChannel.type !== 0) {
+        await sendReply(context, '❌ Cannot find the botspam channel.');
+        return;
+    }
+
+    await deferReply(context, true);
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-
-
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        if (isMessage(context)) {
-             await context.channel.sendTyping();
-        }
-
+        if (isMessage(context)) await context.channel.sendTyping();
 
         const result = await model.generateContent(question);
-
         const response = await result.response.text();
 
-         if (!response) {
-             await sendReply(context, "I couldn't generate a response for that question.", isInteraction(context));
-             return;
-         }
-
-        const responseChunks = response.match(/[\s\S]{1,1900}/g) || [];
-
-        if (isInteraction(context)) {
-             await context.editReply(responseChunks[0]);
-             for (let i = 1; i < responseChunks.length; i++) {
-                 await context.followUp(responseChunks[i]);
-             }
-        } else { 
-             for (const chunk of responseChunks) {
-                 await context.channel.send(chunk);
-             }
+        if (!response) {
+            await sendReply(context, "I couldn't generate a response for that question.");
+            return;
         }
 
+        const responseChunks = response.match(/[\s\S]{1,1900}/g) || [];
+        const header = `**${question}**\nAsked by <@${user.id}>`;
+
+        let firstChunk = responseChunks.shift() || '';
+        let firstMessage = `${header}\n\n${firstChunk}`;
+
+        if (firstMessage.length > 2000) {
+            await botspamChannel.send(header);
+            await botspamChannel.send(firstChunk);
+        } else {
+            await botspamChannel.send(firstMessage);
+        }
+
+        for (const chunk of responseChunks) {
+            await botspamChannel.send(chunk);
+        }
+
+        if (isInteraction(context)) {
+            await context.editReply(`✅ Answer sent in <#${botspamChannelId}>`);
+        }
 
     } catch (error) {
         console.error('Error interacting with Gemini API:', error);
-         if (isInteraction(context) && (context.deferred || context.replied)) {
-              await context.editReply(`\`\`\`Failed to get response: ${error.message}\`\`\``);
-         } else {
-              await sendReply(context, `\`\`\`Failed to get response: ${error.message}\`\`\``);
-         }
-
+        await sendReply(context, `\`\`\`Failed to get response: ${error.message}\`\`\``);
 
         if (error.message.includes('429')) {
-             const followUpOrEdit = isInteraction(context) && (context.deferred || context.replied) ? context.followUp : sendReply;
-             await followUpOrEdit(context, "Seems like I'm getting too many requests. Please try again later.", isInteraction(context));
+            await sendReply(context, "Too many requests. Please try again later.");
         } else if (error.message.includes('403')) {
-             const followUpOrEdit = isInteraction(context) && (context.deferred || context.replied) ? context.followUp : sendReply;
-             await followUpOrEdit(context, "There was an authentication issue with the API. Check the API key.", isInteraction(context));
+            await sendReply(context, "Authentication issue with the API. Check the API key.");
         }
     }
 };
