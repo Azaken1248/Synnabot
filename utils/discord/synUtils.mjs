@@ -172,14 +172,21 @@ export const setBirthday = async (context, args) => {
          return;
      }
 
-    if (typeof day !== 'number' || typeof month !== 'number' || day < 1 || day > 31 || month < 1 || month > 12) {
-        await sendReply(context, '❌ Day must be between 1-31 and Month between 1-12.', isInteraction(context));
+    if (typeof parseInt(day) !== 'number' || typeof parseInt(month) !== 'number' || parseInt(day) < 1 || parseInt(day) > 31 || parseInt(month) < 1 || parseInt(month) > 12) {
+        await sendReply(context, `❌ Day must be between 1-31 and Month between 1-12.`, isInteraction(context));
         return;
     }
 
 
     try {
         const existing = await BirthdayModel.findOne({ discordId: mentionedUser.id });
+
+        day = parseInt(day)
+        month = parseInt(month)
+
+        if (isNaN(day) || isNaN(month) || day < 1 || day > 31 || month < 1 || month > 12) {
+            throw new Error("WHO PUTS LETTERS IN DATE");
+        }
 
         if (existing) {
             existing.day = day.toString(); 
