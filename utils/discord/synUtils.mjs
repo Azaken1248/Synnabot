@@ -1,4 +1,3 @@
-// utils/discord/synUtils.mjs
 import BirthdayModel from '../../DB/schemas/birthdaySchema.mjs';
 import TimeZoneModel from '../../DB/schemas/timeZoneSchema.mjs';
 import TwitchLinkModel from '../../DB/schemas/twitchLinkSchema.mjs';
