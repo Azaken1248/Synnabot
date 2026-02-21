@@ -75,7 +75,7 @@ client.once('ready', async () => {
     startStreamLoop(client);
 });
 
-client.on('disconnected', (event) => {
+client.on('shardDisconnect', (event) => {
     console.log(`Bot disconnected! Code: ${event.code}`);
     console.log(`Bot is ready: ${client.isReady()}`);
 });
